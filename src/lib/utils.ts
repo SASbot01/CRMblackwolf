@@ -1,32 +1,11 @@
-import { LeadStatus, LeadSource, LeadPriority } from "@/types/database";
-
-export const STATUS_CONFIG: Record<LeadStatus, { label: string; color: string; bg: string }> = {
-  nuevo: { label: "New", color: "text-blue-400", bg: "bg-blue-400/10 border-blue-400/20" },
-  contactado: { label: "Contacted", color: "text-cyan-400", bg: "bg-cyan-400/10 border-cyan-400/20" },
-  en_negociacion: { label: "In Negotiation", color: "text-orange-400", bg: "bg-orange-400/10 border-orange-400/20" },
-  propuesta_enviada: { label: "Proposal Sent", color: "text-purple-400", bg: "bg-purple-400/10 border-purple-400/20" },
-  ganado: { label: "Won", color: "text-emerald-400", bg: "bg-emerald-400/10 border-emerald-400/20" },
-  perdido: { label: "Lost", color: "text-red-400", bg: "bg-red-400/10 border-red-400/20" },
-};
-
-export const SOURCE_CONFIG: Record<LeadSource, { label: string }> = {
-  web: { label: "Web" },
-  referido: { label: "Referral" },
-  linkedin: { label: "LinkedIn" },
-  cold_call: { label: "Cold Call" },
-  evento: { label: "Event" },
-  otro: { label: "Other" },
-};
-
-export const PRIORITY_CONFIG: Record<LeadPriority, { label: string; color: string }> = {
-  baja: { label: "Low", color: "text-gray-400" },
-  media: { label: "Medium", color: "text-yellow-400" },
-  alta: { label: "High", color: "text-orange-400" },
-  urgente: { label: "Urgent", color: "text-red-400" },
-};
-
 export function formatCurrency(value: number): string {
-  return new Intl.NumberFormat("en-US", {
+  if (Math.abs(value) >= 1_000_000) {
+    return `€${(value / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`;
+  }
+  if (Math.abs(value) >= 10_000) {
+    return `€${(value / 1_000).toFixed(0)}K`;
+  }
+  return new Intl.NumberFormat("es-ES", {
     style: "currency",
     currency: "EUR",
     minimumFractionDigits: 0,
@@ -35,7 +14,7 @@ export function formatCurrency(value: number): string {
 
 export function formatDate(date: string | null): string {
   if (!date) return "—";
-  return new Intl.DateTimeFormat("en-US", {
+  return new Intl.DateTimeFormat("es-ES", {
     day: "numeric",
     month: "short",
     year: "numeric",
@@ -44,7 +23,7 @@ export function formatDate(date: string | null): string {
 
 export function formatDateTime(date: string | null): string {
   if (!date) return "—";
-  return new Intl.DateTimeFormat("en-US", {
+  return new Intl.DateTimeFormat("es-ES", {
     day: "numeric",
     month: "short",
     hour: "2-digit",
@@ -62,8 +41,23 @@ export function timeAgo(date: string | null): string {
   const days = Math.floor(diff / 86400000);
 
   if (minutes < 1) return "Now";
-  if (minutes < 60) return `${minutes}m ago`;
-  if (hours < 24) return `${hours}h ago`;
-  if (days < 7) return `${days}d ago`;
+  if (minutes < 60) return `${minutes}m`;
+  if (hours < 24) return `${hours}h`;
+  if (days < 7) return `${days}d`;
   return formatDate(date);
 }
+
+export const PRIORITY_COLORS: Record<string, { label: string; color: string; bg: string }> = {
+  low: { label: "Low", color: "text-gray-400", bg: "bg-gray-400/10 border-gray-400/20" },
+  medium: { label: "Medium", color: "text-yellow-400", bg: "bg-yellow-400/10 border-yellow-400/20" },
+  high: { label: "High", color: "text-orange-400", bg: "bg-orange-400/10 border-orange-400/20" },
+  urgent: { label: "Urgent", color: "text-red-400", bg: "bg-red-400/10 border-red-400/20" },
+};
+
+export const ACTIVITY_ICONS: Record<string, { label: string; color: string }> = {
+  call: { label: "Call", color: "text-green-400" },
+  email: { label: "Email", color: "text-blue-400" },
+  meeting: { label: "Meeting", color: "text-purple-400" },
+  note: { label: "Note", color: "text-yellow-400" },
+  task: { label: "Task", color: "text-cyan-400" },
+};

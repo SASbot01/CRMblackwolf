@@ -1,92 +1,103 @@
 "use client";
 
-import { Lead } from "@/types/database";
-import { STATUS_CONFIG, PRIORITY_CONFIG, formatCurrency, timeAgo } from "@/lib/utils";
+import { useState, useEffect } from "react";
+import { apiGetDashboard } from "@/lib/api";
+import { formatCurrency, timeAgo, PRIORITY_COLORS, ACTIVITY_ICONS } from "@/lib/utils";
 import {
   Users,
+  Building2,
   TrendingUp,
   Trophy,
-  Clock,
+  DollarSign,
+  ArrowUpRight,
   Phone,
   Mail,
-  ArrowUpRight,
+  Calendar,
+  FileText,
+  CheckSquare,
 } from "lucide-react";
 
-interface DashboardProps {
-  leads: Lead[];
-  onSelectLead: (id: string) => void;
-  onViewChange: (view: string) => void;
+interface DashboardData {
+  total_contacts: number;
+  total_companies: number;
+  active_deals: number;
+  pipeline_value: number;
+  won_revenue: number;
+  recent_deals: Array<{
+    id: string;
+    title: string;
+    value: number;
+    priority: string;
+    updated_at: string;
+    contact?: { first_name: string; last_name: string };
+    company?: { name: string };
+    stage?: { name: string; color: string };
+  }>;
+  recent_activities: Array<{
+    id: string;
+    type: string;
+    title: string;
+    created_at: string;
+  }>;
 }
 
-export default function Dashboard({ leads, onSelectLead, onViewChange }: DashboardProps) {
-  const total = leads.length;
-  const activos = leads.filter(
-    (l) => !["ganado", "perdido"].includes(l.status)
-  ).length;
-  const ganados = leads.filter((l) => l.status === "ganado").length;
-  const valorPipeline = leads
-    .filter((l) => !["ganado", "perdido"].includes(l.status))
-    .reduce((s, l) => s + l.valor_estimado, 0);
-  const valorGanado = leads
-    .filter((l) => l.status === "ganado")
-    .reduce((s, l) => s + l.valor_estimado, 0);
+interface DashboardProps {
+  onViewChange?: (view: string) => void;
+}
 
-  const urgentes = leads
-    .filter(
-      (l) =>
-        l.fecha_proxima_accion &&
-        new Date(l.fecha_proxima_accion) <= new Date(Date.now() + 86400000 * 2) &&
-        !["ganado", "perdido"].includes(l.status)
-    )
-    .sort(
-      (a, b) =>
-        new Date(a.fecha_proxima_accion!).getTime() -
-        new Date(b.fecha_proxima_accion!).getTime()
+const ACTIVITY_TYPE_ICONS: Record<string, typeof Phone> = {
+  call: Phone,
+  email: Mail,
+  meeting: Calendar,
+  note: FileText,
+  task: CheckSquare,
+};
+
+export default function Dashboard({ onViewChange }: DashboardProps) {
+  const [data, setData] = useState<DashboardData | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    apiGetDashboard()
+      .then((d) => setData(d))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="animate-fadeIn">
+        <div className="grid grid-cols-5 gap-3 mb-6">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} className="bg-surface border border-border rounded-2xl p-4 h-24 animate-pulse" />
+          ))}
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <div className="bg-surface border border-border rounded-2xl p-5 h-64 animate-pulse" />
+          <div className="bg-surface border border-border rounded-2xl p-5 h-64 animate-pulse" />
+        </div>
+      </div>
     );
+  }
 
-  const recientes = [...leads]
-    .sort(
-      (a, b) =>
-        new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
-    )
-    .slice(0, 5);
+  if (!data) {
+    return (
+      <div className="animate-fadeIn flex items-center justify-center h-64">
+        <p className="text-text-tertiary text-sm">Unable to load dashboard data</p>
+      </div>
+    );
+  }
 
   const stats = [
-    {
-      label: "Total Leads",
-      value: total,
-      icon: Users,
-      accent: false,
-    },
-    {
-      label: "Active",
-      value: activos,
-      icon: TrendingUp,
-      accent: false,
-    },
-    {
-      label: "Won",
-      value: ganados,
-      icon: Trophy,
-      accent: true,
-    },
-    {
-      label: "Pipeline",
-      value: formatCurrency(valorPipeline),
-      icon: TrendingUp,
-      accent: false,
-    },
-    {
-      label: "Revenue Won",
-      value: formatCurrency(valorGanado),
-      icon: Trophy,
-      accent: true,
-    },
+    { label: "Total Contacts", value: data.total_contacts, icon: Users, accent: false },
+    { label: "Total Companies", value: data.total_companies, icon: Building2, accent: false },
+    { label: "Active Deals", value: data.active_deals, icon: TrendingUp, accent: false },
+    { label: "Pipeline Value", value: formatCurrency(data.pipeline_value || 0), icon: DollarSign, accent: false },
+    { label: "Won Revenue", value: formatCurrency(data.won_revenue || 0), icon: Trophy, accent: true },
   ];
 
   return (
     <div className="animate-fadeIn">
-      {/* Stats */}
       <div className="grid grid-cols-5 gap-3 mb-6">
         {stats.map((stat) => {
           const Icon = stat.icon;
@@ -116,124 +127,117 @@ export default function Dashboard({ leads, onSelectLead, onViewChange }: Dashboa
         })}
       </div>
 
-      <div className="grid grid-cols-3 gap-4">
-        {/* Acciones urgentes */}
-        <div className="col-span-1 bg-surface border border-border rounded-2xl p-5">
+      <div className="grid grid-cols-2 gap-4">
+        {/* Recent Deals */}
+        <div className="bg-surface border border-border rounded-2xl p-5">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-sm font-semibold flex items-center gap-2">
-              <Clock size={14} className="text-orange-400" />
-              Pending Actions
+              <TrendingUp size={14} className="text-orange-400" />
+              Recent Deals
             </h3>
-            <span className="text-[11px] text-text-tertiary">{urgentes.length}</span>
+            {onViewChange && (
+              <button
+                onClick={() => onViewChange("deals")}
+                className="text-[11px] text-orange-400 hover:text-orange-300 transition-colors"
+              >
+                View all
+              </button>
+            )}
           </div>
-          <div className="space-y-2">
-            {urgentes.length === 0 ? (
+          <div className="space-y-1">
+            {(!data.recent_deals || data.recent_deals.length === 0) ? (
               <p className="text-[13px] text-text-tertiary py-4 text-center">
-                No urgent actions
+                No deals yet
               </p>
             ) : (
-              urgentes.map((lead) => (
-                <button
-                  key={lead.id}
-                  onClick={() => onSelectLead(lead.id)}
-                  className="w-full text-left p-3 rounded-xl bg-[rgba(255,255,255,0.02)] hover:bg-surface-hover border border-transparent hover:border-border transition-all duration-200 group"
+              data.recent_deals.map((deal, i) => (
+                <div
+                  key={deal.id}
+                  className="flex items-center gap-3 p-3 rounded-xl hover:bg-surface-hover transition-all duration-200 group"
+                  style={{ animationDelay: `${i * 50}ms` }}
                 >
-                  <div className="flex items-center justify-between">
-                    <span className="text-[13px] font-medium group-hover:text-white transition-colors">
-                      {lead.nombre}
-                    </span>
-                    <ArrowUpRight
-                      size={12}
-                      className="text-text-tertiary group-hover:text-orange-400 transition-colors"
-                    />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[13px] font-medium truncate">
+                        {deal.title}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      {deal.contact && (
+                        <span className="text-[11px] text-text-tertiary truncate">
+                          {deal.contact.first_name} {deal.contact.last_name}
+                        </span>
+                      )}
+                      {deal.company && (
+                        <span className="text-[11px] text-text-tertiary truncate">
+                          {deal.contact ? "·" : ""} {deal.company.name}
+                        </span>
+                      )}
+                    </div>
                   </div>
-                  <p className="text-[11px] text-text-tertiary mt-0.5">
-                    {lead.proxima_accion}
-                  </p>
-                  <p className="text-[10px] text-orange-400/70 mt-1">
-                    {lead.fecha_proxima_accion
-                      ? new Date(lead.fecha_proxima_accion).toLocaleDateString("en-US", {
-                          day: "numeric",
-                          month: "short",
-                        })
-                      : ""}
-                  </p>
-                </button>
+                  {deal.stage && (
+                    <span
+                      className="text-[10px] font-medium px-2 py-0.5 rounded-md border flex-shrink-0"
+                      style={{
+                        backgroundColor: `${deal.stage.color}15`,
+                        borderColor: `${deal.stage.color}30`,
+                        color: deal.stage.color,
+                      }}
+                    >
+                      {deal.stage.name}
+                    </span>
+                  )}
+                  <div className="text-right flex-shrink-0">
+                    <p className="text-[13px] font-medium text-text-secondary">
+                      {formatCurrency(deal.value || 0)}
+                    </p>
+                    <p className="text-[10px] text-text-tertiary">
+                      {timeAgo(deal.updated_at)}
+                    </p>
+                  </div>
+                </div>
               ))
             )}
           </div>
         </div>
 
-        {/* Actividad reciente */}
-        <div className="col-span-2 bg-surface border border-border rounded-2xl p-5">
+        {/* Recent Activities */}
+        <div className="bg-surface border border-border rounded-2xl p-5">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-semibold">Recent Activity</h3>
-            <button
-              onClick={() => onViewChange("leads")}
-              className="text-[11px] text-orange-400 hover:text-orange-300 transition-colors"
-            >
-              View all →
-            </button>
+            <h3 className="text-sm font-semibold flex items-center gap-2">
+              <CheckSquare size={14} className="text-orange-400" />
+              Recent Activities
+            </h3>
           </div>
           <div className="space-y-1">
-            {recientes.map((lead, i) => {
-              const statusCfg = STATUS_CONFIG[lead.status];
-              const priorityCfg = PRIORITY_CONFIG[lead.prioridad];
-              return (
-                <button
-                  key={lead.id}
-                  onClick={() => onSelectLead(lead.id)}
-                  className="w-full text-left flex items-center gap-4 p-3 rounded-xl hover:bg-surface-hover transition-all duration-200 group"
-                  style={{ animationDelay: `${i * 50}ms` }}
-                >
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-orange-500/20 to-orange-600/10 flex items-center justify-center flex-shrink-0 border border-orange-500/10">
-                    <span className="text-[11px] font-semibold text-orange-400">
-                      {lead.nombre
-                        .split(" ")
-                        .map((n) => n[0])
-                        .join("")
-                        .slice(0, 2)}
+            {(!data.recent_activities || data.recent_activities.length === 0) ? (
+              <p className="text-[13px] text-text-tertiary py-4 text-center">
+                No activities yet
+              </p>
+            ) : (
+              data.recent_activities.map((activity, i) => {
+                const activityConfig = ACTIVITY_ICONS[activity.type] || { label: activity.type, color: "text-text-secondary" };
+                const ActivityIcon = ACTIVITY_TYPE_ICONS[activity.type] || FileText;
+                return (
+                  <div
+                    key={activity.id}
+                    className="flex items-center gap-3 p-3 rounded-xl hover:bg-surface-hover transition-all duration-200"
+                    style={{ animationDelay: `${i * 50}ms` }}
+                  >
+                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 bg-surface border border-border`}>
+                      <ActivityIcon size={14} className={activityConfig.color} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[13px] font-medium truncate">{activity.title}</p>
+                      <p className="text-[11px] text-text-tertiary capitalize">{activityConfig.label}</p>
+                    </div>
+                    <span className="text-[10px] text-text-tertiary flex-shrink-0">
+                      {timeAgo(activity.created_at)}
                     </span>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[13px] font-medium truncate">
-                        {lead.nombre}
-                      </span>
-                      <span className="text-[11px] text-text-tertiary truncate">
-                        {lead.empresa}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-3 mt-0.5">
-                      <span
-                        className={`text-[10px] font-medium px-1.5 py-0.5 rounded-md border ${statusCfg.bg}`}
-                      >
-                        {statusCfg.label}
-                      </span>
-                      <span className={`text-[10px] ${priorityCfg.color}`}>
-                        {priorityCfg.label}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="text-right flex-shrink-0">
-                    <p className="text-[13px] font-medium text-text-secondary">
-                      {formatCurrency(lead.valor_estimado)}
-                    </p>
-                    <div className="flex items-center gap-2 mt-0.5 justify-end">
-                      <span className="text-[10px] text-text-tertiary flex items-center gap-0.5">
-                        <Phone size={9} /> {lead.llamadas_realizadas}
-                      </span>
-                      <span className="text-[10px] text-text-tertiary flex items-center gap-0.5">
-                        <Mail size={9} /> {lead.emails_enviados}
-                      </span>
-                    </div>
-                  </div>
-                  <span className="text-[10px] text-text-tertiary w-16 text-right flex-shrink-0">
-                    {timeAgo(lead.ultima_interaccion)}
-                  </span>
-                </button>
-              );
-            })}
+                );
+              })
+            )}
           </div>
         </div>
       </div>

@@ -3,15 +3,14 @@
 import {
   LayoutDashboard,
   Users,
+  Building2,
   Kanban,
-  BarChart3,
   Settings,
   Shield,
   Sparkles,
   LogOut,
-  UsersRound,
-  DollarSign,
 } from "lucide-react";
+
 interface SidebarUser {
   id: string;
   email: string;
@@ -28,11 +27,9 @@ interface SidebarProps {
 
 const navItems = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { id: "leads", label: "Leads", icon: Users },
-  { id: "pipeline", label: "Pipeline", icon: Kanban },
-  { id: "analytics", label: "Analytics", icon: BarChart3 },
-  { id: "team", label: "Team", icon: UsersRound },
-  { id: "commissions", label: "Commissions", icon: DollarSign },
+  { id: "contacts", label: "Contacts", icon: Users },
+  { id: "companies", label: "Companies", icon: Building2 },
+  { id: "deals", label: "Deals", icon: Kanban },
 ];
 
 export default function Sidebar({ activeView, onViewChange, user, onLogout }: SidebarProps) {
@@ -90,6 +87,10 @@ export default function Sidebar({ activeView, onViewChange, user, onLogout }: Si
               AI
             </span>
           </button>
+
+          <div className="pt-3 pb-1 px-3">
+            <div className="border-t border-border" />
+          </div>
         </div>
       </nav>
 

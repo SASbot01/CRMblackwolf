@@ -1,4 +1,4 @@
-// Frontend API client — all CRUD operations go through here
+// Frontend API client — all CRUD operations
 
 const BASE = "/api";
 
@@ -14,11 +14,16 @@ async function apiFetch(path: string, options: RequestInit = {}): Promise<Respon
     ...(options.headers as Record<string, string> || {}),
   };
   if (token) headers["Authorization"] = `Bearer ${token}`;
-
   return fetch(`${BASE}${path}`, { ...options, headers });
 }
 
-// --- Auth ---
+async function jsonOrThrow(res: Response) {
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Request failed");
+  return data;
+}
+
+// ── Auth ──
 export async function apiLogin(email: string, password: string) {
   const res = await apiFetch("/auth/login", {
     method: "POST",
@@ -56,110 +61,176 @@ export function getStoredUser() {
   } catch { return null; }
 }
 
-// --- Leads ---
-export async function apiGetLeads(filters?: {
-  status?: string; source?: string; prioridad?: string; search?: string;
-}) {
+// ── Contacts ──
+export async function apiGetContacts(search?: string) {
+  const params = search ? `?search=${encodeURIComponent(search)}` : "";
+  const res = await apiFetch(`/contacts${params}`);
+  return jsonOrThrow(res);
+}
+
+export async function apiGetContact(id: string) {
+  const res = await apiFetch(`/contacts/${id}`);
+  return jsonOrThrow(res);
+}
+
+export async function apiCreateContact(data: Record<string, unknown>) {
+  const res = await apiFetch("/contacts", { method: "POST", body: JSON.stringify(data) });
+  return jsonOrThrow(res);
+}
+
+export async function apiUpdateContact(id: string, data: Record<string, unknown>) {
+  const res = await apiFetch(`/contacts/${id}`, { method: "PATCH", body: JSON.stringify(data) });
+  return jsonOrThrow(res);
+}
+
+export async function apiDeleteContact(id: string) {
+  await apiFetch(`/contacts/${id}`, { method: "DELETE" });
+}
+
+// ── Companies ──
+export async function apiGetCompanies(search?: string) {
+  const params = search ? `?search=${encodeURIComponent(search)}` : "";
+  const res = await apiFetch(`/companies${params}`);
+  return jsonOrThrow(res);
+}
+
+export async function apiGetCompany(id: string) {
+  const res = await apiFetch(`/companies/${id}`);
+  return jsonOrThrow(res);
+}
+
+export async function apiCreateCompany(data: Record<string, unknown>) {
+  const res = await apiFetch("/companies", { method: "POST", body: JSON.stringify(data) });
+  return jsonOrThrow(res);
+}
+
+export async function apiUpdateCompany(id: string, data: Record<string, unknown>) {
+  const res = await apiFetch(`/companies/${id}`, { method: "PATCH", body: JSON.stringify(data) });
+  return jsonOrThrow(res);
+}
+
+export async function apiDeleteCompany(id: string) {
+  await apiFetch(`/companies/${id}`, { method: "DELETE" });
+}
+
+// ── Deals ──
+export async function apiGetDeals(filters?: { pipeline_id?: string; stage_id?: string; search?: string }) {
   const params = new URLSearchParams();
-  if (filters?.status) params.set("status", filters.status);
-  if (filters?.source) params.set("source", filters.source);
-  if (filters?.prioridad) params.set("prioridad", filters.prioridad);
+  if (filters?.pipeline_id) params.set("pipeline_id", filters.pipeline_id);
+  if (filters?.stage_id) params.set("stage_id", filters.stage_id);
   if (filters?.search) params.set("search", filters.search);
-  const res = await apiFetch(`/leads?${params}`);
-  return res.json();
+  const res = await apiFetch(`/deals?${params}`);
+  return jsonOrThrow(res);
 }
 
-export async function apiGetLead(id: string) {
-  const res = await apiFetch(`/leads/${id}`);
-  return res.json();
+export async function apiGetDeal(id: string) {
+  const res = await apiFetch(`/deals/${id}`);
+  return jsonOrThrow(res);
 }
 
-export async function apiCreateLead(data: Record<string, unknown>) {
-  const res = await apiFetch("/leads", { method: "POST", body: JSON.stringify(data) });
-  return res.json();
+export async function apiCreateDeal(data: Record<string, unknown>) {
+  const res = await apiFetch("/deals", { method: "POST", body: JSON.stringify(data) });
+  return jsonOrThrow(res);
 }
 
-export async function apiUpdateLead(id: string, data: Record<string, unknown>) {
-  const res = await apiFetch(`/leads/${id}`, { method: "PATCH", body: JSON.stringify(data) });
-  return res.json();
+export async function apiUpdateDeal(id: string, data: Record<string, unknown>) {
+  const res = await apiFetch(`/deals/${id}`, { method: "PATCH", body: JSON.stringify(data) });
+  return jsonOrThrow(res);
 }
 
-export async function apiDeleteLead(id: string) {
-  await apiFetch(`/leads/${id}`, { method: "DELETE" });
+export async function apiDeleteDeal(id: string) {
+  await apiFetch(`/deals/${id}`, { method: "DELETE" });
 }
 
-// --- Activities ---
-export async function apiGetActivities(leadId: string) {
-  const res = await apiFetch(`/activities?lead_id=${leadId}`);
-  return res.json();
+// ── Pipelines ──
+export async function apiGetPipelines() {
+  const res = await apiFetch("/pipelines");
+  return jsonOrThrow(res);
+}
+
+export async function apiCreatePipeline(data: Record<string, unknown>) {
+  const res = await apiFetch("/pipelines", { method: "POST", body: JSON.stringify(data) });
+  return jsonOrThrow(res);
+}
+
+export async function apiUpdatePipeline(id: string, data: Record<string, unknown>) {
+  const res = await apiFetch(`/pipelines/${id}`, { method: "PATCH", body: JSON.stringify(data) });
+  return jsonOrThrow(res);
+}
+
+export async function apiDeletePipeline(id: string) {
+  await apiFetch(`/pipelines/${id}`, { method: "DELETE" });
+}
+
+// ── Custom Fields ──
+export async function apiGetCustomFields(entityType?: string) {
+  const params = entityType ? `?entity_type=${entityType}` : "";
+  const res = await apiFetch(`/custom-fields${params}`);
+  return jsonOrThrow(res);
+}
+
+export async function apiCreateCustomField(data: Record<string, unknown>) {
+  const res = await apiFetch("/custom-fields", { method: "POST", body: JSON.stringify(data) });
+  return jsonOrThrow(res);
+}
+
+export async function apiUpdateCustomField(id: string, data: Record<string, unknown>) {
+  const res = await apiFetch(`/custom-fields/${id}`, { method: "PATCH", body: JSON.stringify(data) });
+  return jsonOrThrow(res);
+}
+
+export async function apiDeleteCustomField(id: string) {
+  await apiFetch(`/custom-fields/${id}`, { method: "DELETE" });
+}
+
+// ── Tags ──
+export async function apiGetTags() {
+  const res = await apiFetch("/tags");
+  return jsonOrThrow(res);
+}
+
+export async function apiCreateTag(data: Record<string, unknown>) {
+  const res = await apiFetch("/tags", { method: "POST", body: JSON.stringify(data) });
+  return jsonOrThrow(res);
+}
+
+export async function apiUpdateTag(id: string, data: Record<string, unknown>) {
+  const res = await apiFetch(`/tags/${id}`, { method: "PATCH", body: JSON.stringify(data) });
+  return jsonOrThrow(res);
+}
+
+export async function apiDeleteTag(id: string) {
+  await apiFetch(`/tags/${id}`, { method: "DELETE" });
+}
+
+// ── Activities ──
+export async function apiGetActivities(entityType: string, entityId: string) {
+  const res = await apiFetch(`/activities?entity_type=${entityType}&entity_id=${entityId}`);
+  return jsonOrThrow(res);
 }
 
 export async function apiCreateActivity(data: Record<string, unknown>) {
   const res = await apiFetch("/activities", { method: "POST", body: JSON.stringify(data) });
-  return res.json();
+  return jsonOrThrow(res);
 }
 
-// --- Team ---
-export async function apiGetMembers() {
-  const res = await apiFetch("/team");
-  return res.json();
+// ── Dashboard ──
+export async function apiGetDashboard() {
+  const res = await apiFetch("/dashboard");
+  return jsonOrThrow(res);
 }
 
-export async function apiCreateMember(data: Record<string, unknown>) {
-  const res = await apiFetch("/team", { method: "POST", body: JSON.stringify(data) });
-  return res.json();
+// ── Entity Tags ──
+export async function apiAddTag(entityType: string, entityId: string, tagId: string) {
+  const res = await apiFetch("/tags/assign", {
+    method: "POST",
+    body: JSON.stringify({ entity_type: entityType, entity_id: entityId, tag_id: tagId }),
+  });
+  return jsonOrThrow(res);
 }
 
-export async function apiUpdateMember(id: string, data: Record<string, unknown>) {
-  const res = await apiFetch(`/team/${id}`, { method: "PATCH", body: JSON.stringify(data) });
-  return res.json();
-}
-
-export async function apiDeleteMember(id: string) {
-  await apiFetch(`/team/${id}`, { method: "DELETE" });
-}
-
-// --- Commissions ---
-export async function apiGetCommissions(filters?: { period?: string; member_id?: string; role?: string; status?: string }) {
-  const params = new URLSearchParams();
-  if (filters?.period) params.set("period", filters.period);
-  if (filters?.member_id) params.set("member_id", filters.member_id);
-  if (filters?.role) params.set("role", filters.role);
-  if (filters?.status) params.set("status", filters.status);
-  const res = await apiFetch(`/commissions?${params}`);
-  return res.json();
-}
-
-export async function apiCreateCommission(data: Record<string, unknown>) {
-  const res = await apiFetch("/commissions", { method: "POST", body: JSON.stringify(data) });
-  return res.json();
-}
-
-export async function apiUpdateCommission(id: string, data: Record<string, unknown>) {
-  const res = await apiFetch(`/commissions/${id}`, { method: "PATCH", body: JSON.stringify(data) });
-  return res.json();
-}
-
-// --- Expenses ---
-export async function apiGetExpenses(filters?: { category?: string; status?: string; period?: string }) {
-  const params = new URLSearchParams();
-  if (filters?.category) params.set("category", filters.category);
-  if (filters?.status) params.set("status", filters.status);
-  if (filters?.period) params.set("period", filters.period);
-  const res = await apiFetch(`/expenses?${params}`);
-  return res.json();
-}
-
-export async function apiCreateExpense(data: Record<string, unknown>) {
-  const res = await apiFetch("/expenses", { method: "POST", body: JSON.stringify(data) });
-  return res.json();
-}
-
-export async function apiUpdateExpense(id: string, data: Record<string, unknown>) {
-  const res = await apiFetch(`/expenses/${id}`, { method: "PATCH", body: JSON.stringify(data) });
-  return res.json();
-}
-
-export async function apiDeleteExpense(id: string) {
-  await apiFetch(`/expenses/${id}`, { method: "DELETE" });
+export async function apiRemoveTag(entityType: string, entityId: string, tagId: string) {
+  await apiFetch(`/tags/assign?entity_type=${entityType}&entity_id=${entityId}&tag_id=${tagId}`, {
+    method: "DELETE",
+  });
 }

@@ -1,45 +1,53 @@
 import { NextRequest, NextResponse } from "next/server";
 import pool from "@/lib/db";
 
-export async function GET(request: NextRequest) {
+export async function GET(req: NextRequest) {
   try {
-    const url = new URL(request.url);
-    const leadId = url.searchParams.get("lead_id");
+    const entity_type = req.nextUrl.searchParams.get("entity_type");
+    const entity_id = req.nextUrl.searchParams.get("entity_id");
 
-    if (!leadId) {
-      return NextResponse.json({ error: "lead_id required" }, { status: 400 });
+    let query = `SELECT * FROM activities`;
+    const values: unknown[] = [];
+    const conditions: string[] = [];
+    let idx = 1;
+
+    if (entity_type) {
+      conditions.push(`entity_type = $${idx++}`);
+      values.push(entity_type);
     }
 
-    const result = await pool.query(
-      "SELECT * FROM activities WHERE lead_id = $1 ORDER BY created_at DESC",
-      [leadId]
-    );
-    return NextResponse.json(result.rows);
-  } catch (error) {
-    console.error("GET activities error:", error);
-    return NextResponse.json({ error: "Server error" }, { status: 500 });
+    if (entity_id) {
+      conditions.push(`entity_id = $${idx++}`);
+      values.push(entity_id);
+    }
+
+    if (conditions.length > 0) {
+      query += ` WHERE ${conditions.join(" AND ")}`;
+    }
+
+    query += ` ORDER BY created_at DESC`;
+
+    const { rows } = await pool.query(query, values);
+    return NextResponse.json(rows);
+  } catch (e: unknown) {
+    return NextResponse.json({ error: (e as Error).message }, { status: 500 });
   }
 }
 
-export async function POST(request: NextRequest) {
+export async function POST(req: NextRequest) {
   try {
-    const data = await request.json();
+    const body = await req.json();
+    const { entity_type, entity_id, type, title, description, completed, due_date, user_id } = body;
 
-    const result = await pool.query(
-      `INSERT INTO activities (lead_id, tipo, descripcion, resultado) VALUES ($1,$2,$3,$4) RETURNING *`,
-      [data.lead_id, data.tipo, data.descripcion, data.resultado || ""]
+    const { rows } = await pool.query(
+      `INSERT INTO activities (entity_type, entity_id, type, title, description, completed, due_date, user_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       RETURNING *`,
+      [entity_type, entity_id, type, title, description || null, completed || false, due_date || null, user_id || null]
     );
 
-    // Update lead's ultima_interaccion and counters
-    const updates: string[] = ["ultima_interaccion = NOW()"];
-    if (data.tipo === "llamada") updates.push("llamadas_realizadas = llamadas_realizadas + 1");
-    if (data.tipo === "email") updates.push("emails_enviados = emails_enviados + 1");
-
-    await pool.query(`UPDATE leads SET ${updates.join(", ")} WHERE id = $1`, [data.lead_id]);
-
-    return NextResponse.json(result.rows[0], { status: 201 });
-  } catch (error) {
-    console.error("POST activity error:", error);
-    return NextResponse.json({ error: "Server error" }, { status: 500 });
+    return NextResponse.json(rows[0], { status: 201 });
+  } catch (e: unknown) {
+    return NextResponse.json({ error: (e as Error).message }, { status: 500 });
   }
 }
