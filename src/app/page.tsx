@@ -3,28 +3,13 @@
 import { useState, useEffect, useCallback } from "react";
 import { Lead, Activity, LeadStatus, LeadSource, LeadPriority, TeamMember, Commission, Expense } from "@/types/database";
 import {
-  getLeads,
-  getLead,
-  createLead,
-  updateLead,
-  deleteLead,
-  getActivities,
-  createActivity,
-} from "@/lib/store";
-import {
-  getMembers,
-  createMember,
-  updateMember,
-  deleteMember,
-  getCommissions,
-  createCommission,
-  updateCommission,
-  getExpenses,
-  createExpense,
-  updateExpense,
-  deleteExpense,
-} from "@/lib/teamStore";
-import { User, loginUser, logoutUser, getStoredUser } from "@/lib/auth";
+  apiLogin, apiLogout, getStoredUser,
+  apiGetLeads, apiGetLead, apiCreateLead, apiUpdateLead, apiDeleteLead,
+  apiGetActivities, apiCreateActivity,
+  apiGetMembers, apiCreateMember, apiUpdateMember, apiDeleteMember,
+  apiGetCommissions, apiCreateCommission, apiUpdateCommission,
+  apiGetExpenses, apiCreateExpense, apiUpdateExpense, apiDeleteExpense,
+} from "@/lib/api";
 import LoginScreen from "@/components/LoginScreen";
 import Sidebar from "@/components/Sidebar";
 import Dashboard from "@/components/Dashboard";
@@ -37,8 +22,15 @@ import AIAgent from "@/components/AIAgent";
 import Team from "@/components/Team";
 import Commissions from "@/components/Commissions";
 
+interface AppUser {
+  id: string;
+  email: string;
+  nombre: string;
+  role: "admin" | "user";
+}
+
 export default function CRM() {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<AppUser | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [activeView, setActiveView] = useState("dashboard");
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -52,31 +44,40 @@ export default function CRM() {
     search: string;
   }>({ search: "" });
 
-  // Team & Commissions state
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [commissions, setCommissionsList] = useState<Commission[]>([]);
   const [expenses, setExpensesList] = useState<Expense[]>([]);
 
+  // Check stored session
   useEffect(() => {
     const stored = getStoredUser();
     if (stored) setUser(stored);
     setAuthLoading(false);
   }, []);
 
+  // Seed users on first load (idempotent)
+  useEffect(() => {
+    fetch("/api/auth/seed", { method: "POST" }).catch(() => {});
+  }, []);
+
   const loadLeads = useCallback(async () => {
-    const data = await getLeads(filters);
-    setLeads(data);
+    try {
+      const data = await apiGetLeads(filters);
+      if (Array.isArray(data)) setLeads(data);
+    } catch { /* DB not ready yet */ }
   }, [filters]);
 
   const loadTeamData = useCallback(async () => {
-    const [m, c, e] = await Promise.all([
-      getMembers(),
-      getCommissions(),
-      getExpenses(),
-    ]);
-    setMembers(m);
-    setCommissionsList(c);
-    setExpensesList(e);
+    try {
+      const [m, c, e] = await Promise.all([
+        apiGetMembers(),
+        apiGetCommissions(),
+        apiGetExpenses(),
+      ]);
+      if (Array.isArray(m)) setMembers(m);
+      if (Array.isArray(c)) setCommissionsList(c);
+      if (Array.isArray(e)) setExpensesList(e);
+    } catch { /* DB not ready yet */ }
   }, []);
 
   useEffect(() => {
@@ -87,7 +88,7 @@ export default function CRM() {
   }, [loadLeads, loadTeamData, user]);
 
   async function handleLogin(email: string, password: string) {
-    const result = await loginUser(email, password);
+    const result = await apiLogin(email, password);
     if (result.success && result.user) {
       setUser(result.user);
     }
@@ -95,97 +96,94 @@ export default function CRM() {
   }
 
   function handleLogout() {
-    logoutUser();
+    apiLogout();
     setUser(null);
     setActiveView("dashboard");
     setSelectedLead(null);
   }
 
   async function handleSelectLead(id: string) {
-    const lead = await getLead(id);
-    if (lead) {
+    const lead = await apiGetLead(id);
+    if (lead && lead.id) {
       setSelectedLead(lead);
-      const acts = await getActivities(id);
-      setSelectedActivities(acts);
+      const acts = await apiGetActivities(id);
+      setSelectedActivities(Array.isArray(acts) ? acts : []);
     }
   }
 
   async function handleCreateLead(data: Omit<Lead, "id" | "created_at" | "updated_at">) {
-    await createLead(data);
+    await apiCreateLead(data as Record<string, unknown>);
     setShowNewLead(false);
     await loadLeads();
   }
 
   async function handleUpdateLead(id: string, data: Partial<Lead>) {
-    const updated = await updateLead(id, data);
-    if (updated) {
+    const updated = await apiUpdateLead(id, data as Record<string, unknown>);
+    if (updated && updated.id) {
       setSelectedLead(updated);
       await loadLeads();
     }
   }
 
   async function handleDeleteLead(id: string) {
-    await deleteLead(id);
+    await apiDeleteLead(id);
     setSelectedLead(null);
     await loadLeads();
   }
 
   async function handleAddActivity(data: Omit<Activity, "id" | "created_at">) {
-    await createActivity(data);
+    await apiCreateActivity(data as Record<string, unknown>);
     if (selectedLead) {
-      const lead = await getLead(selectedLead.id);
-      if (lead) setSelectedLead(lead);
-      const acts = await getActivities(selectedLead.id);
-      setSelectedActivities(acts);
+      const lead = await apiGetLead(selectedLead.id);
+      if (lead && lead.id) setSelectedLead(lead);
+      const acts = await apiGetActivities(selectedLead.id);
+      setSelectedActivities(Array.isArray(acts) ? acts : []);
     }
     await loadLeads();
   }
 
   async function handleUpdateStatus(id: string, status: LeadStatus) {
-    await updateLead(id, { status });
+    await apiUpdateLead(id, { status } as Record<string, unknown>);
     await loadLeads();
   }
 
-  // Team handlers
   async function handleCreateMember(data: Omit<TeamMember, "id" | "created_at">) {
-    await createMember(data);
+    await apiCreateMember(data as Record<string, unknown>);
     await loadTeamData();
   }
 
   async function handleUpdateMember(id: string, data: Partial<TeamMember>) {
-    await updateMember(id, data);
+    await apiUpdateMember(id, data as Record<string, unknown>);
     await loadTeamData();
   }
 
   async function handleDeleteMember(id: string) {
-    await deleteMember(id);
+    await apiDeleteMember(id);
     await loadTeamData();
   }
 
-  // Commission handlers
   async function handleCreateCommission(data: Omit<Commission, "id" | "created_at">) {
-    await createCommission(data);
+    await apiCreateCommission(data as Record<string, unknown>);
     await loadTeamData();
   }
 
   async function handleUpdateCommission(id: string, data: Partial<Commission>) {
-    await updateCommission(id, data);
+    await apiUpdateCommission(id, data as Record<string, unknown>);
     await loadTeamData();
   }
 
-  // Expense handlers
   async function handleCreateExpense(data: Omit<Expense, "id" | "created_at">) {
-    await createExpense(data);
+    await apiCreateExpense(data as Record<string, unknown>);
     await loadTeamData();
   }
 
   async function handleUpdateExpense(id: string, data: Partial<Expense>) {
-    await updateExpense(id, data);
+    await apiUpdateExpense(id, data as Record<string, unknown>);
     await loadTeamData();
   }
 
   async function handleDeleteExpense(id: string) {
-    await deleteExpense(id);
+    await apiDeleteExpense(id);
     await loadTeamData();
   }
 
@@ -233,7 +231,6 @@ export default function CRM() {
       />
 
       <main className="flex-1 overflow-y-auto">
-        {/* Top Bar */}
         <div className="sticky top-0 z-20 bg-background/80 backdrop-blur-xl border-b border-border px-6 py-4">
           <div className="flex items-center justify-between">
             <div>
@@ -246,175 +243,68 @@ export default function CRM() {
             </div>
             <div className="flex items-center gap-3">
               <div className="text-right hidden sm:block">
-                <p className="text-[12px] font-medium text-text-secondary">
-                  {user.nombre}
-                </p>
+                <p className="text-[12px] font-medium text-text-secondary">{user.nombre}</p>
                 <p className="text-[10px] text-text-tertiary">{user.role}</p>
               </div>
               <div className="w-8 h-8 rounded-full bg-gradient-to-br from-orange-500 to-orange-600 flex items-center justify-center text-[11px] font-bold text-white shadow-lg shadow-orange-500/20">
-                {user.nombre
-                  .split(" ")
-                  .map((n) => n[0])
-                  .join("")
-                  .slice(0, 2)}
+                {user.nombre.split(" ").map((n) => n[0]).join("").slice(0, 2)}
               </div>
             </div>
           </div>
         </div>
 
-        {/* Content */}
         <div className="p-6">
           {activeView === "dashboard" && (
-            <Dashboard
-              leads={leads}
-              onSelectLead={handleSelectLead}
-              onViewChange={setActiveView}
-            />
+            <Dashboard leads={leads} onSelectLead={handleSelectLead} onViewChange={setActiveView} />
           )}
-
           {activeView === "leads" && (
-            <LeadTable
-              leads={leads}
-              onSelectLead={handleSelectLead}
-              onNewLead={() => setShowNewLead(true)}
-              filters={filters}
-              onFilterChange={setFilters}
-            />
+            <LeadTable leads={leads} onSelectLead={handleSelectLead} onNewLead={() => setShowNewLead(true)} filters={filters} onFilterChange={setFilters} />
           )}
-
           {activeView === "pipeline" && (
-            <Pipeline
-              leads={leads}
-              onSelectLead={handleSelectLead}
-              onUpdateStatus={handleUpdateStatus}
-            />
+            <Pipeline leads={leads} onSelectLead={handleSelectLead} onUpdateStatus={handleUpdateStatus} />
           )}
-
           {activeView === "analytics" && <Analytics leads={leads} />}
-
           {activeView === "team" && (
-            <Team
-              members={members}
-              onCreateMember={handleCreateMember}
-              onUpdateMember={handleUpdateMember}
-              onDeleteMember={handleDeleteMember}
-            />
+            <Team members={members} onCreateMember={handleCreateMember} onUpdateMember={handleUpdateMember} onDeleteMember={handleDeleteMember} />
           )}
-
           {activeView === "commissions" && (
-            <Commissions
-              commissions={commissions}
-              expenses={expenses}
-              members={members}
-              onCreateCommission={handleCreateCommission}
-              onUpdateCommission={handleUpdateCommission}
-              onCreateExpense={handleCreateExpense}
-              onUpdateExpense={handleUpdateExpense}
-              onDeleteExpense={handleDeleteExpense}
-            />
+            <Commissions commissions={commissions} expenses={expenses} members={members} onCreateCommission={handleCreateCommission} onUpdateCommission={handleUpdateCommission} onCreateExpense={handleCreateExpense} onUpdateExpense={handleUpdateExpense} onDeleteExpense={handleDeleteExpense} />
           )}
-
           {activeView === "agent" && <AIAgent />}
-
           {activeView === "settings" && (
             <div className="animate-fadeIn">
               <div className="max-w-lg space-y-4">
                 <div className="bg-surface border border-border rounded-2xl p-6">
-                  <h3 className="text-sm font-semibold mb-4">Supabase Connection</h3>
-                  <p className="text-[13px] text-text-secondary mb-4">
-                    Set up the environment variables to connect with Supabase:
-                  </p>
+                  <h3 className="text-sm font-semibold mb-4">Database</h3>
+                  <p className="text-[13px] text-text-secondary mb-4">PostgreSQL running in Docker.</p>
                   <div className="bg-[#0a0a0a] rounded-xl p-4 border border-border font-mono text-[12px] text-text-secondary space-y-1">
-                    <p><span className="text-orange-400">NEXT_PUBLIC_SUPABASE_URL</span>=your_url</p>
-                    <p><span className="text-orange-400">NEXT_PUBLIC_SUPABASE_ANON_KEY</span>=your_key</p>
+                    <p><span className="text-orange-400">DATABASE_URL</span>=postgresql://blackwolf:***@db:5432/blackwolf_crm</p>
+                    <p><span className="text-orange-400">JWT_SECRET</span>=your-secret-key</p>
                   </div>
-                  <p className="text-[11px] text-text-tertiary mt-3">Currently using local demo data.</p>
+                  <p className="text-[11px] text-text-tertiary mt-3">Connected to PostgreSQL via Docker Compose.</p>
                 </div>
-
                 <div className="bg-surface border border-border rounded-2xl p-6">
                   <h3 className="text-sm font-semibold mb-4">AI Agent — Anthropic API</h3>
-                  <p className="text-[13px] text-text-secondary mb-4">
-                    To use the AI Agent, configure your Anthropic API key:
-                  </p>
+                  <p className="text-[13px] text-text-secondary mb-4">Set the API key as an environment variable:</p>
                   <div className="bg-[#0a0a0a] rounded-xl p-4 border border-border font-mono text-[12px] text-text-secondary">
                     <p><span className="text-orange-400">ANTHROPIC_API_KEY</span>=sk-ant-...</p>
                   </div>
-                  <p className="text-[11px] text-text-tertiary mt-3">
-                    The agent uses Claude Sonnet 4 to generate code and suggest improvements.
-                  </p>
                 </div>
-
                 <div className="bg-surface border border-border rounded-2xl p-6">
-                  <h3 className="text-sm font-semibold mb-2">SQL for Supabase</h3>
-                  <p className="text-[13px] text-text-secondary mb-4">
-                    Run this SQL in your Supabase project:
-                  </p>
-                  <pre className="bg-[#0a0a0a] rounded-xl p-4 border border-border font-mono text-[11px] text-text-secondary overflow-x-auto whitespace-pre">
-{`create table leads (
-  id uuid default gen_random_uuid() primary key,
-  created_at timestamptz default now(),
-  updated_at timestamptz default now(),
-  nombre text not null,
-  empresa text not null,
-  email text default '',
-  telefono text default '',
-  cargo text default '',
-  status text default 'nuevo',
-  source text default 'web',
-  prioridad text default 'media',
-  valor_estimado numeric default 0,
-  notas text default '',
-  ultima_interaccion timestamptz,
-  proxima_accion text,
-  fecha_proxima_accion timestamptz,
-  llamadas_realizadas int default 0,
-  emails_enviados int default 0
-);
-
-create table activities (
-  id uuid default gen_random_uuid() primary key,
-  created_at timestamptz default now(),
-  lead_id uuid references leads(id) on delete cascade,
-  tipo text not null,
-  descripcion text not null,
-  resultado text default ''
-);
-
-create table team_members (
-  id uuid default gen_random_uuid() primary key,
-  created_at timestamptz default now(),
-  nombre text not null,
-  email text not null,
-  roles text[] default '{}',
-  status text default 'active',
-  base_rate numeric default 0
-);
-
-create table commissions (
-  id uuid default gen_random_uuid() primary key,
-  created_at timestamptz default now(),
-  member_id uuid references team_members(id) on delete cascade,
-  role text not null,
-  cash_neto numeric default 0,
-  rate numeric default 0,
-  commission_amount numeric default 0,
-  source_lead text,
-  status text default 'pending',
-  payment_date timestamptz,
-  period text not null
-);
-
-create table expenses (
-  id uuid default gen_random_uuid() primary key,
-  created_at timestamptz default now(),
-  concept text not null,
-  amount numeric default 0,
-  category text default 'operational',
-  status text default 'pending',
-  date date not null,
-  notes text default ''
-);`}
-                  </pre>
+                  <h3 className="text-sm font-semibold mb-4">Docker Commands</h3>
+                  <div className="bg-[#0a0a0a] rounded-xl p-4 border border-border font-mono text-[11px] text-text-secondary space-y-1">
+                    <p><span className="text-emerald-400">#</span> Start everything</p>
+                    <p>docker compose up -d</p>
+                    <p></p>
+                    <p><span className="text-emerald-400">#</span> View logs</p>
+                    <p>docker compose logs -f app</p>
+                    <p></p>
+                    <p><span className="text-emerald-400">#</span> Rebuild after changes</p>
+                    <p>docker compose up -d --build</p>
+                    <p></p>
+                    <p><span className="text-emerald-400">#</span> Stop</p>
+                    <p>docker compose down</p>
+                  </div>
                 </div>
               </div>
             </div>
@@ -434,10 +324,7 @@ create table expenses (
       )}
 
       {showNewLead && (
-        <LeadForm
-          onSubmit={handleCreateLead}
-          onClose={() => setShowNewLead(false)}
-        />
+        <LeadForm onSubmit={handleCreateLead} onClose={() => setShowNewLead(false)} />
       )}
     </div>
   );

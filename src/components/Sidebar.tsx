@@ -12,12 +12,17 @@ import {
   UsersRound,
   DollarSign,
 } from "lucide-react";
-import { User } from "@/lib/auth";
+interface SidebarUser {
+  id: string;
+  email: string;
+  nombre: string;
+  role: string;
+}
 
 interface SidebarProps {
   activeView: string;
   onViewChange: (view: string) => void;
-  user: User | null;
+  user: SidebarUser | null;
   onLogout: () => void;
 }
 
